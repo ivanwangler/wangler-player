@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-accent: var(--accent-color, #EAB308);
+  --color-midnight: #1a0505;
+  --color-deep-blue: #2d0a0a;
+  --color-wine-vivid: #4a0e0e;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0f0202] text-white font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 15px var(--tw-shadow-color);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .mask-fade-y {
+    mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  }
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: background 1.5s ease;
+}
+
+.player-chrome {
+  background: rgba(45, 10, 10, 0.7);
+  backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 0, 85, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn-neon {
+  background: linear-gradient(135deg, #ff0055 0%, #a30036 100%);
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.4);
+}
+
+.micro-label {
+  @apply font-mono uppercase tracking-[0.2em] text-[9px] font-medium;
+}
+
+.timecode {
+  @apply font-mono text-[10px] tracking-tighter;
+}
