@@ -7,12 +7,17 @@ import Library from './components/Library';
 import DSPSettings from './components/DSPSettings';
 import ArchitectureDoc from './components/ArchitectureDoc';
 
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'player' | 'eq' | 'library' | 'arch' | 'dsp'>('player');
   const [isPlaying, setIsPlaying] = useState(false);
   const [accentColor, setAccentColor] = useState('#EAB308');
   const [audioSource, setAudioSource] = useState<string | null>(null);
-  const [trackInfo, setTrackInfo] = useState({ title: 'No Track Selected', artist: 'Upload from Library' });
+  const [trackInfo, setTrackInfo] = useState({
+    title: 'No Track Selected',
+    artist: 'Upload from Library',
+    coverUrl: ''
+  });
   const [volume, setVolume] = useState(0.8);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
@@ -88,16 +93,58 @@ export default function App() {
   // ─── Track selection ─────────────────────────────────────────────────────
   const handleSelectTrack = (file: File | { id: number; title: string; artist: string }) => {
     if (audioSource) URL.revokeObjectURL(audioSource);
+    // Cleanup previous coverUrl if it was a blob URL
+    if (trackInfo.coverUrl && trackInfo.coverUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(trackInfo.coverUrl);
+    }
 
     if (file instanceof File) {
       const url = URL.createObjectURL(file);
       setAudioSource(url);
-      setTrackInfo({ title: file.name.replace(/\.[^/.]+$/, ''), artist: 'Local File' });
+
+      // Extract metadata and cover art safely from window
+      const jsmediatags = (window as any).jsmediatags;
+      if (jsmediatags) {
+        jsmediatags.read(file, {
+          onSuccess: (tag: any) => {
+            const { title, artist, picture } = tag.tags;
+            let coverUrl = '';
+
+            if (picture) {
+              const { data, format } = picture;
+              const uint8Array = new Uint8Array(data);
+              const blob = new Blob([uint8Array], { type: format });
+              coverUrl = URL.createObjectURL(blob);
+            }
+
+            setTrackInfo({
+              title: title || file.name.replace(/\.[^/.]+$/, ''),
+              artist: artist || 'Local File',
+              coverUrl: coverUrl
+            });
+          },
+          onError: (error: any) => {
+            console.warn('Error reading tags:', error);
+            setTrackInfo({
+              title: file.name.replace(/\.[^/.]+$/, ''),
+              artist: 'Local File',
+              coverUrl: ''
+            });
+          }
+        });
+      } else {
+        console.warn('jsmediatags not found on window');
+        setTrackInfo({
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          artist: 'Local File',
+          coverUrl: ''
+        });
+      }
       setCurrentQueueIndex(-1);
     } else {
       // Mock track — no real audio, just update metadata
       setAudioSource(null);
-      setTrackInfo({ title: file.title, artist: file.artist });
+      setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
       setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
     }
     setActiveTab('player');
@@ -107,7 +154,7 @@ export default function App() {
   const handleNextTrack = () => {
     if (currentQueueIndex < queue.length - 1) {
       const next = queue[currentQueueIndex + 1];
-      setTrackInfo({ title: next.title, artist: next.artist });
+      setTrackInfo({ title: next.title, artist: next.artist, coverUrl: '' });
       setCurrentQueueIndex(currentQueueIndex + 1);
     }
   };
@@ -115,7 +162,7 @@ export default function App() {
   const handlePreviousTrack = () => {
     if (currentQueueIndex > 0) {
       const prev = queue[currentQueueIndex - 1];
-      setTrackInfo({ title: prev.title, artist: prev.artist });
+      setTrackInfo({ title: prev.title, artist: prev.artist, coverUrl: '' });
       setCurrentQueueIndex(currentQueueIndex - 1);
     }
   };

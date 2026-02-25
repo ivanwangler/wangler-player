@@ -9,7 +9,7 @@ interface PlayerProps {
   accentColor: string;
   audioSource: string | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
-  trackInfo: { title: string; artist: string };
+  trackInfo: { title: string; artist: string; coverUrl?: string };
   onNext: () => void;
   onPrevious: () => void;
   volume: number;
@@ -140,7 +140,7 @@ export default function Player({
             style={{ backgroundColor: accentColor }}
           />
           <img
-            src={trackInfo.title === 'No Track Selected' ? 'https://i.postimg.cc/W4ND1Ypt/aguia.webp' : 'https://picsum.photos/seed/music/600/600'}
+            src={trackInfo.coverUrl || (trackInfo.title === 'No Track Selected' ? 'https://i.postimg.cc/W4ND1Ypt/aguia.webp' : 'https://picsum.photos/seed/music/600/600')}
             alt="Album Art"
             className="w-full h-full object-cover rounded-[28px] shadow-[0_15px_40px_rgba(0,0,0,0.5)] relative z-10 border border-white/10"
             referrerPolicy="no-referrer"
