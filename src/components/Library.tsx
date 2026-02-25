@@ -111,7 +111,7 @@ export default function Library({
             <div className="flex items-center space-x-2 ml-4">
               <button
                 onClick={(e) => { e.stopPropagation(); onPlayNext(track); }}
-                className="p-2 rounded-xl bg-white/5 text-white/20 hover:text-accent hover:bg-accent/10 transition-all opacity-0 group-hover:opacity-100"
+                className="p-2 rounded-xl bg-white/5 text-white/40 hover:text-accent sm:opacity-0 sm:group-hover:opacity-100 transition-all shadow-lg"
                 title="Tocar próxima"
               >
                 <Music2 size={16} />

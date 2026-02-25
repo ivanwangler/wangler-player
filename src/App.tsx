@@ -212,7 +212,7 @@ export default function App() {
       />
 
       {/* Main App Container */}
-      <div className="w-full max-w-md h-[850px] max-h-[90vh] player-chrome rounded-[48px] flex flex-col overflow-hidden relative z-10">
+      <div className="w-full sm:max-w-md h-[100dvh] sm:h-[850px] sm:max-h-[90vh] sm:rounded-[48px] player-chrome flex flex-col overflow-hidden relative z-10">
 
         {/* Header */}
         <header className="px-8 pt-6 pb-2 flex items-center justify-between">

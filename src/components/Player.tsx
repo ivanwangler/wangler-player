@@ -124,7 +124,7 @@ export default function Player({
   const progressPercent = durationMs > 0 ? (currentTimeMs / durationMs) * 100 : 0;
 
   return (
-    <div className="flex flex-col min-h-full h-auto px-8 pt-4 pb-8 relative overflow-hidden no-scrollbar">
+    <div className="flex flex-col flex-1 px-8 pt-4 pb-8 relative overflow-hidden no-scrollbar">
 
       {/* Album Art + Lyrics */}
       <div className="flex-1 flex flex-col items-center justify-start pt-4 relative">

@@ -15,6 +15,14 @@
 @layer base {
   body {
     @apply bg-[#0f0202] text-white font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
   }
 }
 
