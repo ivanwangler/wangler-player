@@ -28,6 +28,7 @@ export default function App() {
   // Queue and Library
   const [queue, setQueue] = useState<any[]>([]);
   const [libraryTracks, setLibraryTracks] = useState<any[]>([]);
+  const [recentTracks, setRecentTracks] = useState<any[]>([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
 
   // ─── Initialize AudioContext once (called on first real user gesture) ───────
@@ -145,54 +146,68 @@ export default function App() {
 
     if (file instanceof File) {
       processFile(file, file.name.replace(/\.[^/.]+$/, ''), 'Local File');
-      setCurrentQueueIndex(-1);
+      // If we just played a single file, make sure it's in a temporary queue context or similar
+      const newTrack = { id: Date.now(), title: file.name.replace(/\.[^/.]+$/, ''), artist: 'Local File', isFile: true, file };
+      setQueue([newTrack]);
+      setCurrentQueueIndex(0);
+      setRecentTracks(prev => [newTrack, ...prev.filter(t => t.id !== newTrack.id)].slice(0, 20));
     } else if (file.isFile && file.file) {
       processFile(file.file, file.title, file.artist);
-      // Try to find in queue first, then library
-      const idx = queue.findIndex(t => t.id === file.id);
-      setCurrentQueueIndex(idx);
+
+      let idx = queue.findIndex(t => t.id === file.id);
+      if (idx === -1) {
+        // If playing from library and not in queue, sync library to queue
+        const libIdx = libraryTracks.findIndex(t => t.id === file.id);
+        if (libIdx !== -1) {
+          setQueue([...libraryTracks]);
+          setCurrentQueueIndex(libIdx);
+        }
+      } else {
+        setCurrentQueueIndex(idx);
+      }
+      setRecentTracks(prev => [file, ...prev.filter(t => t.id !== file.id)].slice(0, 20));
     } else {
       setAudioSource(null);
       setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
       setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
+      setRecentTracks(prev => [file, ...prev.filter(t => t.id !== file.id)].slice(0, 20));
     }
     setActiveTab('player');
     setIsPlaying(true);
   };
 
   const handleAddTracks = (files: FileList | File[]) => {
-    const newTracks: any[] = Array.from(files).map(file => ({
-      id: Math.random() + Date.now(),
-      title: file.name.replace(/\.[^/.]+$/, ''),
-      artist: 'Local File',
-      isFile: true,
-      file,
-      format: file.name.split('.').pop()?.toUpperCase()
-    }));
+    const newTracks: any[] = Array.from(files).map(file => {
+      // In a real mobile environment, we might get webkitRelativePath if the user uploads a folder
+      const path = (file as any).webkitRelativePath || '';
+      const folderName = path.split('/')[0] || 'Biblioteca';
+
+      return {
+        id: Math.random() + Date.now(),
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        artist: 'Local File',
+        isFile: true,
+        file,
+        format: file.name.split('.').pop()?.toUpperCase(),
+        folder: folderName
+      };
+    });
     setLibraryTracks(prev => [...prev, ...newTracks]);
   };
 
   const handleNextTrack = () => {
-    if (currentQueueIndex < queue.length - 1) {
-      const next = queue[currentQueueIndex + 1];
-      if (next.isFile && (next as any).file) {
-        handleSelectTrack(next);
-      } else {
-        setTrackInfo({ title: next.title, artist: next.artist, coverUrl: '' });
-        setCurrentQueueIndex(currentQueueIndex + 1);
-      }
+    const activeQueue = queue.length > 0 ? queue : libraryTracks;
+    if (activeQueue.length > 0 && currentQueueIndex < activeQueue.length - 1) {
+      const next = activeQueue[currentQueueIndex + 1];
+      handleSelectTrack(next);
     }
   };
 
   const handlePreviousTrack = () => {
-    if (currentQueueIndex > 0) {
-      const prev = queue[currentQueueIndex - 1];
-      if (prev.isFile && (prev as any).file) {
-        handleSelectTrack(prev);
-      } else {
-        setTrackInfo({ title: prev.title, artist: prev.artist, coverUrl: '' });
-        setCurrentQueueIndex(currentQueueIndex - 1);
-      }
+    const activeQueue = queue.length > 0 ? queue : libraryTracks;
+    if (activeQueue.length > 0 && currentQueueIndex > 0) {
+      const prev = activeQueue[currentQueueIndex - 1];
+      handleSelectTrack(prev);
     }
   };
 
@@ -337,7 +352,9 @@ export default function App() {
                   onPlayNext={handlePlayNext}
                   onAddToQueue={handleAddToQueue}
                   onAddTracks={handleAddTracks}
-                  tracks={libraryTracks.length > 0 ? libraryTracks : queue}
+                  tracks={libraryTracks}
+                  recentTracks={recentTracks}
+                  queue={queue}
                   currentTrackId={queue[currentQueueIndex]?.id}
                 />
               </motion.div>
