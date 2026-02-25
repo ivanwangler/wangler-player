@@ -25,12 +25,9 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Queue
-  const [queue, setQueue] = useState([
-    { id: 1, title: "Midnight City", artist: "M83", format: "FLAC 24/192", duration: "4:03" },
-    { id: 2, title: "Starboy", artist: "The Weeknd", format: "DSD 128", duration: "3:50" },
-    { id: 3, title: "Instant Crush", artist: "Daft Punk", format: "WAV 32/384", duration: "5:37" },
-  ]);
+  // Queue and Library
+  const [queue, setQueue] = useState<any[]>([]);
+  const [libraryTracks, setLibraryTracks] = useState<any[]>([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
 
   // ─── Initialize AudioContext once (called on first real user gesture) ───────
@@ -151,7 +148,9 @@ export default function App() {
       setCurrentQueueIndex(-1);
     } else if (file.isFile && file.file) {
       processFile(file.file, file.title, file.artist);
-      setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
+      // Try to find in queue first, then library
+      const idx = queue.findIndex(t => t.id === file.id);
+      setCurrentQueueIndex(idx);
     } else {
       setAudioSource(null);
       setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
@@ -159,6 +158,18 @@ export default function App() {
     }
     setActiveTab('player');
     setIsPlaying(true);
+  };
+
+  const handleAddTracks = (files: FileList | File[]) => {
+    const newTracks: any[] = Array.from(files).map(file => ({
+      id: Math.random() + Date.now(),
+      title: file.name.replace(/\.[^/.]+$/, ''),
+      artist: 'Local File',
+      isFile: true,
+      file,
+      format: file.name.split('.').pop()?.toUpperCase()
+    }));
+    setLibraryTracks(prev => [...prev, ...newTracks]);
   };
 
   const handleNextTrack = () => {
@@ -325,7 +336,8 @@ export default function App() {
                   onSelectTrack={handleSelectTrack}
                   onPlayNext={handlePlayNext}
                   onAddToQueue={handleAddToQueue}
-                  tracks={queue}
+                  onAddTracks={handleAddTracks}
+                  tracks={libraryTracks.length > 0 ? libraryTracks : queue}
                   currentTrackId={queue[currentQueueIndex]?.id}
                 />
               </motion.div>
