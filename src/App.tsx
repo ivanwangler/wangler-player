@@ -26,7 +26,7 @@ export default function App() {
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Queue
-  const [queue] = useState([
+  const [queue, setQueue] = useState([
     { id: 1, title: "Midnight City", artist: "M83", format: "FLAC 24/192", duration: "4:03" },
     { id: 2, title: "Starboy", artist: "The Weeknd", format: "DSD 128", duration: "3:50" },
     { id: 3, title: "Instant Crush", artist: "Daft Punk", format: "WAV 32/384", duration: "5:37" },
@@ -91,58 +91,68 @@ export default function App() {
   }, [audioSource]);
 
   // ─── Track selection ─────────────────────────────────────────────────────
-  const handleSelectTrack = (file: File | { id: number; title: string; artist: string }) => {
+  const handleAddToQueue = (file: File | any) => {
+    const newTrack = file instanceof File
+      ? { id: Date.now(), title: file.name.replace(/\.[^/.]+$/, ''), artist: 'Local File', isFile: true, file }
+      : { ...file, id: Date.now() };
+    setQueue([...queue, newTrack]);
+  };
+
+  const handlePlayNext = (file: File | any) => {
+    const newTrack = file instanceof File
+      ? { id: Date.now(), title: file.name.replace(/\.[^/.]+$/, ''), artist: 'Local File', isFile: true, file }
+      : { ...file, id: Date.now() };
+
+    const newQueue = [...queue];
+    const insertIndex = currentQueueIndex + 1;
+    newQueue.splice(insertIndex, 0, newTrack);
+    setQueue(newQueue);
+  };
+
+  const handleSelectTrack = (file: File | any) => {
     if (audioSource) URL.revokeObjectURL(audioSource);
-    // Cleanup previous coverUrl if it was a blob URL
     if (trackInfo.coverUrl && trackInfo.coverUrl.startsWith('blob:')) {
       URL.revokeObjectURL(trackInfo.coverUrl);
     }
 
-    if (file instanceof File) {
-      const url = URL.createObjectURL(file);
+    const processFile = (fileToProcess: File, trackTitle: string, trackArtist: string) => {
+      const url = URL.createObjectURL(fileToProcess);
       setAudioSource(url);
-
-      // Extract metadata and cover art safely from window
       const jsmediatags = (window as any).jsmediatags;
       if (jsmediatags) {
-        jsmediatags.read(file, {
+        jsmediatags.read(fileToProcess, {
           onSuccess: (tag: any) => {
             const { title, artist, picture } = tag.tags;
             let coverUrl = '';
-
             if (picture) {
               const { data, format } = picture;
               const uint8Array = new Uint8Array(data);
               const blob = new Blob([uint8Array], { type: format });
               coverUrl = URL.createObjectURL(blob);
             }
-
             setTrackInfo({
-              title: title || file.name.replace(/\.[^/.]+$/, ''),
-              artist: artist || 'Local File',
+              title: title || trackTitle,
+              artist: artist || trackArtist,
               coverUrl: coverUrl
             });
           },
           onError: (error: any) => {
             console.warn('Error reading tags:', error);
-            setTrackInfo({
-              title: file.name.replace(/\.[^/.]+$/, ''),
-              artist: 'Local File',
-              coverUrl: ''
-            });
+            setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '' });
           }
         });
       } else {
-        console.warn('jsmediatags not found on window');
-        setTrackInfo({
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          artist: 'Local File',
-          coverUrl: ''
-        });
+        setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '' });
       }
+    };
+
+    if (file instanceof File) {
+      processFile(file, file.name.replace(/\.[^/.]+$/, ''), 'Local File');
       setCurrentQueueIndex(-1);
+    } else if (file.isFile && file.file) {
+      processFile(file.file, file.title, file.artist);
+      setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
     } else {
-      // Mock track — no real audio, just update metadata
       setAudioSource(null);
       setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
       setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
@@ -154,16 +164,24 @@ export default function App() {
   const handleNextTrack = () => {
     if (currentQueueIndex < queue.length - 1) {
       const next = queue[currentQueueIndex + 1];
-      setTrackInfo({ title: next.title, artist: next.artist, coverUrl: '' });
-      setCurrentQueueIndex(currentQueueIndex + 1);
+      if (next.isFile && (next as any).file) {
+        handleSelectTrack(next);
+      } else {
+        setTrackInfo({ title: next.title, artist: next.artist, coverUrl: '' });
+        setCurrentQueueIndex(currentQueueIndex + 1);
+      }
     }
   };
 
   const handlePreviousTrack = () => {
     if (currentQueueIndex > 0) {
       const prev = queue[currentQueueIndex - 1];
-      setTrackInfo({ title: prev.title, artist: prev.artist, coverUrl: '' });
-      setCurrentQueueIndex(currentQueueIndex - 1);
+      if (prev.isFile && (prev as any).file) {
+        handleSelectTrack(prev);
+      } else {
+        setTrackInfo({ title: prev.title, artist: prev.artist, coverUrl: '' });
+        setCurrentQueueIndex(currentQueueIndex - 1);
+      }
     }
   };
 
@@ -305,7 +323,10 @@ export default function App() {
                 <Library
                   accentColor={accentColor}
                   onSelectTrack={handleSelectTrack}
+                  onPlayNext={handlePlayNext}
+                  onAddToQueue={handleAddToQueue}
                   tracks={queue}
+                  currentTrackId={queue[currentQueueIndex]?.id}
                 />
               </motion.div>
             )}
