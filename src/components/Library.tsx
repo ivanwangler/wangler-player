@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload } from 'lucide-react';
+import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload, Trash2 } from 'lucide-react';
 
 interface Track {
   id: number;
@@ -16,6 +16,7 @@ interface LibraryProps {
   onPlayNext: (track: File | Track) => void;
   onAddToQueue: (track: File | Track) => void;
   onAddTracks: (files: FileList | File[]) => void;
+  onRemoveTrack: (id: number) => void;
   tracks: Track[];
   recentTracks: Track[];
   queue: Track[];
@@ -30,6 +31,7 @@ export default function Library({
   onPlayNext,
   onAddToQueue,
   onAddTracks,
+  onRemoveTrack,
   tracks,
   recentTracks,
   queue,
@@ -112,6 +114,13 @@ export default function Library({
           title="Tocar próxima"
         >
           <Music2 size={16} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemoveTrack(track.id); }}
+          className="p-2 rounded-xl bg-white/5 text-white/40 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all shadow-lg"
+          title="Remover da biblioteca"
+        >
+          <Trash2 size={16} />
         </button>
         <button className="p-2 text-white/20 hover:text-white transition-colors">
           <MoreVertical size={16} />

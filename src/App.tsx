@@ -5,11 +5,13 @@ import Player from './components/Player';
 import Equalizer from './components/Equalizer';
 import Library from './components/Library';
 import DSPSettings from './components/DSPSettings';
+import Settings from './components/Settings';
 import ArchitectureDoc from './components/ArchitectureDoc';
+import { getAllTracks, saveTrack, deleteTrack } from './utils/db';
 
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'player' | 'eq' | 'library' | 'arch' | 'dsp'>('player');
+  const [activeTab, setActiveTab] = useState<'player' | 'eq' | 'library' | 'arch' | 'dsp' | 'settings'>('player');
   const [isPlaying, setIsPlaying] = useState(false);
   const [accentColor, setAccentColor] = useState('#EAB308');
   const [audioSource, setAudioSource] = useState<string | null>(null);
@@ -123,6 +125,21 @@ export default function App() {
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Load tracks from IndexedDB
+  useEffect(() => {
+    const loadLibrary = async () => {
+      try {
+        const storedTracks = await getAllTracks();
+        if (storedTracks.length > 0) {
+          setLibraryTracks(storedTracks);
+        }
+      } catch (err) {
+        console.error('Failed to load library:', err);
+      }
+    };
+    loadLibrary();
   }, []);
 
   const handleInstallClick = async () => {
@@ -239,14 +256,19 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{
-              parts: [{ text: `Generate a high-quality music album cover search query for the song "${title}" by "${artist}". Return ONLY the query string.` }]
+              parts: [{ text: `Generate a short search query for the album cover of "${title}" by "${artist}". Return ONLY the query string, e.g. "Abbey Road Beatles". No quotes.` }]
             }]
           })
         });
         const data = await response.json();
-        const query = data.candidates?.[0]?.content?.parts?.[0]?.text || `${title} ${artist} album cover`;
-        const imageUrl = `https://source.unsplash.com/800x800/?music,album,${encodeURIComponent(query.trim())}`;
-        setTrackInfo(prev => ({ ...prev, coverUrl: imageUrl }));
+        const query = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || `${title} ${artist}`;
+        // Using LoremFlickr for stable, tag-based music imagery
+        const dynamicUrl = `https://loremflickr.com/800/800/music,album,${encodeURIComponent(query.replace(/\s+/g, ','))}/all`;
+
+        setTrackInfo(prev => ({
+          ...prev,
+          coverUrl: dynamicUrl
+        }));
       } catch (err) {
         console.warn('AI Cover error:', err);
       }
@@ -294,7 +316,7 @@ export default function App() {
     setIsPlaying(true);
   };
 
-  const handleAddTracks = (files: FileList | File[]) => {
+  const handleAddTracks = async (files: FileList | File[]) => {
     const newTracks: any[] = Array.from(files).map(file => {
       // In a real mobile environment, we might get webkitRelativePath if the user uploads a folder
       const path = (file as any).webkitRelativePath || '';
@@ -310,7 +332,28 @@ export default function App() {
         folder: folderName
       };
     });
+
     setLibraryTracks(prev => [...prev, ...newTracks]);
+
+    // Persist to IndexedDB
+    for (const track of newTracks) {
+      try {
+        await saveTrack(track);
+      } catch (err) {
+        console.warn('Failed to save track to DB:', err);
+      }
+    }
+  };
+
+  const handleRemoveTrack = async (id: number) => {
+    setLibraryTracks(prev => prev.filter(t => t.id !== id));
+    setQueue(prev => prev.filter(t => t.id !== id));
+    setRecentTracks(prev => prev.filter(t => t.id !== id));
+    try {
+      await deleteTrack(id);
+    } catch (err) {
+      console.warn('Failed to delete track from DB:', err);
+    }
   };
 
   const handleNextTrack = () => {
@@ -386,7 +429,10 @@ export default function App() {
             >
               <Info size={16} />
             </button>
-            <button className="p-2 rounded-xl glass-card text-white/60 hover:text-white transition-all">
+            <button
+              onClick={() => setActiveTab(activeTab === 'settings' ? 'player' : 'settings')}
+              className={`p-2 rounded-xl glass-card transition-all ${activeTab === 'settings' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-white/60 hover:text-white'}`}
+            >
               <Settings2 size={16} />
             </button>
           </div>
@@ -487,6 +533,7 @@ export default function App() {
                   onPlayNext={handlePlayNext}
                   onAddToQueue={handleAddToQueue}
                   onAddTracks={handleAddTracks}
+                  onRemoveTrack={handleRemoveTrack}
                   tracks={libraryTracks}
                   recentTracks={recentTracks}
                   queue={queue}
@@ -520,6 +567,21 @@ export default function App() {
                 className="absolute inset-0 h-full"
               >
                 <ArchitectureDoc />
+              </motion.div>
+            )}
+            {activeTab === 'settings' && (
+              <motion.div
+                key="settings"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.1 }}
+                transition={{ duration: 0.3 }}
+                className="absolute inset-0 h-full"
+              >
+                <Settings
+                  accentColor={accentColor}
+                  setAccentColor={setAccentColor}
+                />
               </motion.div>
             )}
           </AnimatePresence>
