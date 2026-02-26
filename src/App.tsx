@@ -20,6 +20,8 @@ export default function App() {
   });
   const [volume, setVolume] = useState(0.8);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [isHiRes, setIsHiRes] = useState(false);
+  const [is24Bit, setIs24Bit] = useState(false);
 
   // Refs — all persistent, never recreated on tab switch
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -30,23 +32,104 @@ export default function App() {
   const [libraryTracks, setLibraryTracks] = useState<any[]>([]);
   const [recentTracks, setRecentTracks] = useState<any[]>([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  // EQ & DSP State
+  const [eqGains, setEqGains] = useState<number[]>(new Array(15).fill(0));
+  const [qFactor, setQFactor] = useState(1.41);
+  const [dspSettings, setDspSettings] = useState({
+    aiUpsampling: true,
+    upsamplingLevel: 2,
+    smartCrossfade: true,
+    crossfadeDuration: 3.5,
+    phaseCorrection: true
+  });
 
   // ─── Initialize AudioContext once (called on first real user gesture) ───────
   const initAudioContext = () => {
     if (audioCtxRef.current || !audioRef.current) return;
     const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
     const ctx = new Ctx();
+
+    // Create Analyser
     const analyserNode = ctx.createAnalyser();
     analyserNode.fftSize = 256;
+
+    // Create EQ nodes
+    const bands = [20, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 20000];
+    const filters = bands.map((freq) => {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'peaking';
+      filter.frequency.value = freq;
+      filter.Q.value = qFactor;
+      filter.gain.value = 0;
+      return filter;
+    });
+
+    // Create DSP nodes
+    const compression = ctx.createDynamicsCompressor();
+    compression.threshold.setValueAtTime(-24, ctx.currentTime);
+    compression.knee.setValueAtTime(30, ctx.currentTime);
+    compression.ratio.setValueAtTime(12, ctx.currentTime);
+    compression.attack.setValueAtTime(0.003, ctx.currentTime);
+    compression.release.setValueAtTime(0.25, ctx.currentTime);
+
     try {
       const src = ctx.createMediaElementSource(audioRef.current);
-      src.connect(analyserNode);
+
+      // Chain: Source -> Filters -> Compression -> Analyser -> Destination
+      let lastNode: AudioNode = src;
+      filters.forEach(f => {
+        lastNode.connect(f);
+        lastNode = f;
+      });
+      lastNode.connect(compression);
+      compression.connect(analyserNode);
       analyserNode.connect(ctx.destination);
+
       audioCtxRef.current = ctx;
       setAnalyser(analyserNode);
+
+      // Store filters in ref for real-time updates
+      (window as any)._audioFilters = filters;
+      (window as any)._audioCompressor = compression;
+
     } catch (err) {
       console.warn('AudioContext init error:', err);
     }
+  };
+
+  // Sync EQ Gains to nodes
+  useEffect(() => {
+    const filters = (window as any)._audioFilters;
+    if (filters) {
+      eqGains.forEach((gain, i) => {
+        if (filters[i]) filters[i].gain.setTargetAtTime(gain, audioCtxRef.current?.currentTime || 0, 0.05);
+      });
+    }
+  }, [eqGains]);
+
+  useEffect(() => {
+    const filters = (window as any)._audioFilters as BiquadFilterNode[];
+    if (filters) {
+      filters.forEach(f => f.Q.setTargetAtTime(qFactor, audioCtxRef.current?.currentTime || 0, 0.05));
+    }
+  }, [qFactor]);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
   };
 
   // ─── Playback: react to audioSource change ────────────────────────────────
@@ -141,6 +224,31 @@ export default function App() {
         });
       } else {
         setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '' });
+        // Fallback to AI Cover if not in history or similar
+        fetchAICover(trackTitle, trackArtist);
+      }
+    };
+
+    const fetchAICover = async (title: string, artist: string) => {
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+      if (!apiKey) return;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: `Generate a high-quality music album cover search query for the song "${title}" by "${artist}". Return ONLY the query string.` }]
+            }]
+          })
+        });
+        const data = await response.json();
+        const query = data.candidates?.[0]?.content?.parts?.[0]?.text || `${title} ${artist} album cover`;
+        const imageUrl = `https://source.unsplash.com/800x800/?music,album,${encodeURIComponent(query.trim())}`;
+        setTrackInfo(prev => ({ ...prev, coverUrl: imageUrl }));
+      } catch (err) {
+        console.warn('AI Cover error:', err);
       }
     };
 
@@ -151,6 +259,7 @@ export default function App() {
       setQueue([newTrack]);
       setCurrentQueueIndex(0);
       setRecentTracks(prev => [newTrack, ...prev.filter(t => t.id !== newTrack.id)].slice(0, 20));
+      fetchAICover(newTrack.title, newTrack.artist);
     } else if (file.isFile && file.file) {
       processFile(file.file, file.title, file.artist);
 
@@ -166,12 +275,21 @@ export default function App() {
         setCurrentQueueIndex(idx);
       }
       setRecentTracks(prev => [file, ...prev.filter(t => t.id !== file.id)].slice(0, 20));
+      if (!file.coverUrl) fetchAICover(file.title, file.artist);
     } else {
       setAudioSource(null);
       setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
       setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
       setRecentTracks(prev => [file, ...prev.filter(t => t.id !== file.id)].slice(0, 20));
+      fetchAICover(file.title, file.artist);
     }
+
+    // Detect quality
+    const format = (file as any).format || (file instanceof File ? file.name.split('.').pop()?.toUpperCase() : '');
+    const highRes = ['FLAC', 'WAV', 'ALAC', 'AIFF'].includes(format || '');
+    setIsHiRes(highRes);
+    setIs24Bit(highRes);
+
     setActiveTab('player');
     setIsPlaying(true);
   };
@@ -254,6 +372,14 @@ export default function App() {
             <h1 className="text-lg font-display font-bold tracking-tight">Usuário</h1>
           </div>
           <div className="flex items-center space-x-2">
+            {installPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="p-2 rounded-xl bg-accent text-black hover:scale-110 transition-all shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse"
+              >
+                <Zap size={16} fill="currentColor" />
+              </button>
+            )}
             <button
               onClick={() => setActiveTab(activeTab === 'arch' ? 'player' : 'arch')}
               className={`p-2 rounded-xl glass-card transition-all ${activeTab === 'arch' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
@@ -322,6 +448,9 @@ export default function App() {
                   volume={volume}
                   setVolume={setVolume}
                   analyser={analyser}
+                  isHiRes={isHiRes}
+                  is24Bit={is24Bit}
+                  nextTrack={queue[currentQueueIndex + 1] || libraryTracks[0]}
                 />
               </motion.div>
             )}
@@ -334,7 +463,13 @@ export default function App() {
                 transition={{ duration: 0.3 }}
                 className="absolute inset-0 h-full"
               >
-                <Equalizer accentColor={accentColor} />
+                <Equalizer
+                  accentColor={accentColor}
+                  eqGains={eqGains}
+                  setEqGains={setEqGains}
+                  qFactor={qFactor}
+                  setQFactor={setQFactor}
+                />
               </motion.div>
             )}
             {activeTab === 'library' && (
@@ -368,7 +503,11 @@ export default function App() {
                 transition={{ duration: 0.3 }}
                 className="absolute inset-0 h-full"
               >
-                <DSPSettings accentColor={accentColor} />
+                <DSPSettings
+                  accentColor={accentColor}
+                  settings={dspSettings}
+                  setSettings={setDspSettings}
+                />
               </motion.div>
             )}
             {activeTab === 'arch' && (

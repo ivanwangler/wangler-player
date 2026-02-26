@@ -37,7 +37,20 @@ export default function Library({
 }: LibraryProps) {
   const [activeTab, setActiveTab] = React.useState<TabType>('Biblioteca');
   const [selectedFolder, setSelectedFolder] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [storageInfo, setStorageInfo] = React.useState({ used: 0, total: 0 });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(estimate => {
+        setStorageInfo({
+          used: estimate.usage || 0,
+          total: estimate.quota || 0
+        });
+      });
+    }
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -108,20 +121,27 @@ export default function Library({
   );
 
   const getDisplayTracks = () => {
+    let baseTracks: Track[] = [];
     switch (activeTab) {
-      case 'Fila': return queue;
-      case 'Recentes': return recentTracks;
-      case 'Biblioteca': return tracks;
-      case 'Pastas': return selectedFolder ? (folders.find(f => f[0] === selectedFolder)?.[1] || []) : [];
-      default: return tracks;
+      case 'Fila': baseTracks = queue; break;
+      case 'Recentes': baseTracks = recentTracks; break;
+      case 'Biblioteca': baseTracks = tracks; break;
+      case 'Pastas': baseTracks = selectedFolder ? (folders.find(f => f[0] === selectedFolder)?.[1] || []) : []; break;
+      default: baseTracks = tracks;
     }
+
+    if (!searchQuery) return baseTracks;
+    return baseTracks.filter(t =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.artist.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   };
 
   const displayTracks = getDisplayTracks();
 
   return (
     <div className="flex flex-col h-full px-6 pt-4 pb-8 overflow-hidden bg-black/20 backdrop-blur-xl">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-display font-bold tracking-tight text-white/90">Music Hub</h2>
           {activeTab === 'Pastas' && selectedFolder && (
@@ -149,6 +169,18 @@ export default function Library({
             <Upload size={20} />
           </button>
         </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+        <input
+          type="text"
+          placeholder="Buscar na biblioteca..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-white/5 border border-white/5 rounded-2xl py-3 pl-12 pr-4 text-xs font-medium placeholder:text-white/20 focus:outline-none focus:border-accent/30 transition-all"
+        />
       </div>
 
       {/* Categories */}
@@ -216,12 +248,18 @@ export default function Library({
             <Folder size={18} />
           </div>
           <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-wider">Local Storage</p>
-            <p className="text-[9px] text-white/30 font-mono">128 GB / 512 GB used</p>
+            <p className="text-[10px] font-display font-bold uppercase tracking-wider">Device Storage</p>
+            <p className="text-[9px] text-white/30 font-mono">
+              {(storageInfo.used / 1024 / 1024 / 1024).toFixed(1)} GB /
+              {(storageInfo.total / 1024 / 1024 / 1024).toFixed(1)} GB used
+            </p>
           </div>
         </div>
         <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-accent shadow-[0_0_10px_rgba(0,212,255,0.5)] w-1/4" />
+          <div
+            className="h-full bg-accent shadow-[0_0_10px_rgba(0,212,255,0.5)] transition-all duration-500"
+            style={{ width: `${(storageInfo.used / storageInfo.total) * 100 || 0}%` }}
+          />
         </div>
       </div>
     </div>

@@ -1,20 +1,28 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import { RotateCcw, Save, Activity } from 'lucide-react';
 
 interface EqualizerProps {
   accentColor: string;
+  eqGains: number[];
+  setEqGains: (gains: number[]) => void;
+  qFactor: number;
+  setQFactor: (q: number) => void;
 }
 
-export default function Equalizer({ accentColor }: EqualizerProps) {
+export default function Equalizer({
+  accentColor,
+  eqGains,
+  setEqGains,
+  qFactor,
+  setQFactor
+}: EqualizerProps) {
   const bands = [20, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 20000];
-  const [values, setValues] = useState(bands.map(() => 0));
-  const [qFactor, setQFactor] = useState(1.41);
 
   const handleSliderChange = (index: number, val: number) => {
-    const newValues = [...values];
+    const newValues = [...eqGains];
     newValues[index] = val;
-    setValues(newValues);
+    setEqGains(newValues);
   };
 
   return (
@@ -25,8 +33,8 @@ export default function Equalizer({ accentColor }: EqualizerProps) {
           <p className="micro-label text-[9px] mt-1 text-accent">Elite 15-Band Mastering Grade</p>
         </div>
         <div className="flex space-x-2">
-          <button 
-            onClick={() => setValues(bands.map(() => 0))}
+          <button
+            onClick={() => setEqGains(bands.map(() => 0))}
             className="p-2 rounded-full bg-white/5 text-white/50 hover:text-white transition-colors"
           >
             <RotateCcw size={16} />
@@ -47,12 +55,12 @@ export default function Equalizer({ accentColor }: EqualizerProps) {
             </linearGradient>
           </defs>
           <path
-            d={`M 0 64 ${values.map((v, i) => `L ${(i / (values.length - 1)) * 100}% ${64 - v * 4}`).join(' ')} L 100% 64 L 100% 128 L 0 128 Z`}
+            d={`M 0 64 ${eqGains.map((v, i) => `L ${(i / (eqGains.length - 1)) * 100}% ${64 - v * 4}`).join(' ')} L 100% 64 L 100% 128 L 0 128 Z`}
             fill="url(#eqGradient)"
             className="transition-all duration-300"
           />
           <path
-            d={`M 0 64 ${values.map((v, i) => `L ${(i / (values.length - 1)) * 100}% ${64 - v * 4}`).join(' ')} L 100% 64`}
+            d={`M 0 64 ${eqGains.map((v, i) => `L ${(i / (eqGains.length - 1)) * 100}% ${64 - v * 4}`).join(' ')} L 100% 64`}
             fill="none"
             stroke={accentColor}
             strokeWidth="2"
@@ -70,35 +78,35 @@ export default function Equalizer({ accentColor }: EqualizerProps) {
         {bands.map((freq, i) => (
           <div key={freq} className="flex flex-col items-center space-y-4 px-0.5">
             <span className="micro-label text-[7px] rotate-[-90deg] h-8 flex items-center whitespace-nowrap">
-              {freq >= 1000 ? `${freq/1000}k` : freq}Hz
+              {freq >= 1000 ? `${freq / 1000}k` : freq}Hz
             </span>
             <div className="relative h-40 w-5 flex justify-center">
-               <div className="absolute inset-y-0 w-[1px] bg-white/10" />
-               <input 
-                type="range" 
-                min="-12" 
-                max="12" 
+              <div className="absolute inset-y-0 w-[1px] bg-white/10" />
+              <input
+                type="range"
+                min="-12"
+                max="12"
                 step="0.1"
-                value={values[i]}
+                value={eqGains[i]}
                 onChange={(e) => handleSliderChange(i, parseFloat(e.target.value))}
                 className="eq-slider appearance-none bg-transparent cursor-pointer z-10"
-                style={{ 
+                style={{
                   WebkitAppearance: 'slider-vertical',
                   height: '100%',
                   width: '100%'
                 } as any}
               />
               {/* Custom Thumb indicator */}
-              <div 
+              <div
                 className="absolute w-2.5 h-1 bg-white rounded-full pointer-events-none transition-all duration-75"
-                style={{ 
-                  bottom: `${((values[i] + 12) / 24) * 100}%`,
+                style={{
+                  bottom: `${((eqGains[i] + 12) / 24) * 100}%`,
                   boxShadow: `0 0 8px ${accentColor}`
                 }}
               />
             </div>
             <span className="timecode text-[7px] w-5 text-center">
-              {values[i] > 0 ? '+' : ''}{values[i].toFixed(1)}
+              {eqGains[i] > 0 ? '+' : ''}{eqGains[i].toFixed(1)}
             </span>
           </div>
         ))}
@@ -113,10 +121,10 @@ export default function Equalizer({ accentColor }: EqualizerProps) {
           </div>
           <span className="timecode text-xs text-accent font-bold">{qFactor.toFixed(2)}</span>
         </div>
-        <input 
-          type="range" 
-          min="0.1" 
-          max="10.0" 
+        <input
+          type="range"
+          min="0.1"
+          max="10.0"
           step="0.01"
           value={qFactor}
           onChange={(e) => setQFactor(parseFloat(e.target.value))}

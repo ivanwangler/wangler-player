@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import { Zap, Sparkles, Timer, Activity, BrainCircuit, Waves } from 'lucide-react';
 
 interface DSPSettingsProps {
   accentColor: string;
+  settings: {
+    aiUpsampling: boolean;
+    upsamplingLevel: number;
+    smartCrossfade: boolean;
+    crossfadeDuration: number;
+    phaseCorrection: boolean;
+  };
+  setSettings: (s: any) => void;
 }
 
-export default function DSPSettings({ accentColor }: DSPSettingsProps) {
-  const [aiUpsampling, setAiUpsampling] = useState(true);
-  const [upsamplingLevel, setUpsamplingLevel] = useState(2); // 2x, 4x, 8x
-  const [smartCrossfade, setSmartCrossfade] = useState(true);
-  const [crossfadeDuration, setCrossfadeDuration] = useState(3.5);
-  const [phaseCorrection, setPhaseCorrection] = useState(true);
+export default function DSPSettings({ accentColor, settings, setSettings }: DSPSettingsProps) {
+  const { aiUpsampling, upsamplingLevel, smartCrossfade, crossfadeDuration, phaseCorrection } = settings;
+
+  const updateSetting = (key: string, value: any) => {
+    setSettings({ ...settings, [key]: value });
+  };
 
   return (
     <div className="flex flex-col h-full px-6 pt-4 pb-8 overflow-y-auto no-scrollbar">
@@ -33,11 +41,11 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
                 <p className="text-[10px] text-white/30 font-medium">Neural reconstruction of lost harmonics</p>
               </div>
             </div>
-            <button 
-              onClick={() => setAiUpsampling(!aiUpsampling)}
+            <button
+              onClick={() => updateSetting('aiUpsampling', !aiUpsampling)}
               className={`w-12 h-6 rounded-full relative transition-colors ${aiUpsampling ? 'bg-accent' : 'bg-white/10'}`}
             >
-              <motion.div 
+              <motion.div
                 animate={{ x: aiUpsampling ? 26 : 2 }}
                 className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-sm"
               />
@@ -45,7 +53,7 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
           </div>
 
           {aiUpsampling && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="space-y-4 pt-2"
@@ -56,9 +64,9 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
               </div>
               <div className="flex space-x-2">
                 {[2, 4, 8].map(level => (
-                  <button 
+                  <button
                     key={level}
-                    onClick={() => setUpsamplingLevel(level)}
+                    onClick={() => updateSetting('upsamplingLevel', level)}
                     className={`flex-1 py-2.5 rounded-xl text-[10px] font-mono font-bold transition-all ${upsamplingLevel === level ? 'bg-white/10 text-white border border-white/20 shadow-lg' : 'bg-white/5 text-white/20 border border-transparent'}`}
                   >
                     {level}X
@@ -85,11 +93,11 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
                 <p className="text-[10px] text-white/30 font-medium">Intelligent transition based on tempo</p>
               </div>
             </div>
-            <button 
-              onClick={() => setSmartCrossfade(!smartCrossfade)}
+            <button
+              onClick={() => updateSetting('smartCrossfade', !smartCrossfade)}
               className={`w-12 h-6 rounded-full relative transition-colors ${smartCrossfade ? 'bg-blue-500' : 'bg-white/10'}`}
             >
-              <motion.div 
+              <motion.div
                 animate={{ x: smartCrossfade ? 26 : 2 }}
                 className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-sm"
               />
@@ -97,7 +105,7 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
           </div>
 
           {smartCrossfade && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="space-y-4 pt-2"
@@ -106,13 +114,13 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
                 <span className="micro-label">Transition Window</span>
                 <span className="timecode text-blue-400 font-bold">{crossfadeDuration}s</span>
               </div>
-              <input 
-                type="range" 
-                min="0.5" 
-                max="10.0" 
+              <input
+                type="range"
+                min="0.5"
+                max="10.0"
                 step="0.1"
                 value={crossfadeDuration}
-                onChange={(e) => setCrossfadeDuration(parseFloat(e.target.value))}
+                onChange={(e) => updateSetting('crossfadeDuration', parseFloat(e.target.value))}
                 className="w-full accent-blue-500"
               />
               <div className="flex items-center space-x-2 text-[9px] text-blue-400/60 bg-blue-400/5 p-2.5 rounded-xl">
@@ -135,11 +143,11 @@ export default function DSPSettings({ accentColor }: DSPSettingsProps) {
                 <p className="text-[10px] text-white/30 font-medium">Linear phase alignment for Hi-Res</p>
               </div>
             </div>
-            <button 
-              onClick={() => setPhaseCorrection(!phaseCorrection)}
+            <button
+              onClick={() => updateSetting('phaseCorrection', !phaseCorrection)}
               className={`w-12 h-6 rounded-full relative transition-colors ${phaseCorrection ? 'bg-accent' : 'bg-white/10'}`}
             >
-              <motion.div 
+              <motion.div
                 animate={{ x: phaseCorrection ? 26 : 2 }}
                 className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-sm"
               />

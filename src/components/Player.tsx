@@ -15,6 +15,9 @@ interface PlayerProps {
   volume: number;
   setVolume: (v: number) => void;
   analyser: AnalyserNode | null;
+  isHiRes?: boolean;
+  is24Bit?: boolean;
+  nextTrack?: { title: string; artist: string; coverUrl?: string };
 }
 
 interface LyricLine {
@@ -49,6 +52,9 @@ export default function Player({
   volume,
   setVolume,
   analyser,
+  isHiRes = false,
+  is24Bit = false,
+  nextTrack
 }: PlayerProps) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
@@ -239,8 +245,8 @@ export default function Player({
         <div className="flex justify-between items-center">
           <span className="timecode text-white/30">{formatTime(currentTimeMs)}</span>
           <div className="flex items-center space-x-3">
-            <span className="micro-label px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[8px]">HI-RES</span>
-            <span className="micro-label px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/30 text-[8px]">24-BIT</span>
+            {isHiRes && <span className="micro-label px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[8px]">HI-RES</span>}
+            {is24Bit && <span className="micro-label px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/30 text-[8px]">24-BIT</span>}
           </div>
           <span className="timecode text-white/30">{formatTime(durationMs)}</span>
         </div>
@@ -306,16 +312,27 @@ export default function Player({
           <h3 className="text-[8px] font-display font-bold uppercase tracking-[0.2em] text-white/40">Up Next</h3>
           <button className="text-[8px] font-display font-bold uppercase tracking-[0.2em] text-accent">View All</button>
         </div>
-        <div className="flex items-center space-x-3 p-2 rounded-2xl glass-card border-white/5">
-          <div className="w-8 h-8 rounded-lg overflow-hidden">
-            <img src="https://picsum.photos/seed/next/100/100" alt="Next" className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
+        {nextTrack ? (
+          <div className="flex items-center space-x-3 p-2 rounded-2xl glass-card border-white/5">
+            <div className="w-8 h-8 rounded-lg overflow-hidden">
+              <img
+                src={nextTrack.coverUrl || 'https://i.postimg.cc/W4ND1Ypt/aguia.webp'}
+                alt="Next"
+                className="w-full h-full object-cover opacity-60"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-display font-bold truncate">{nextTrack.title}</p>
+              <p className="text-[8px] text-white/30 font-medium truncate">{nextTrack.artist}</p>
+            </div>
+            <Volume2 size={12} className="text-white/20" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-display font-bold truncate">Starboy</p>
-            <p className="text-[8px] text-white/30 font-medium truncate">The Weeknd • Starboy</p>
+        ) : (
+          <div className="p-4 text-center text-white/10 text-[8px] font-bold uppercase tracking-widest bg-white/5 rounded-2xl">
+            No track in queue
           </div>
-          <Volume2 size={12} className="text-white/20" />
-        </div>
+        )}
       </div>
     </div>
   );
