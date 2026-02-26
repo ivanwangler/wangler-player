@@ -24,6 +24,8 @@ export default function App() {
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [isHiRes, setIsHiRes] = useState(false);
   const [is24Bit, setIs24Bit] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [isRepeat, setIsRepeat] = useState(false);
 
   // Refs — all persistent, never recreated on tab switch
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -127,13 +129,23 @@ export default function App() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Load tracks from IndexedDB
+  // Load tracks from IndexedDB and auto-select last played
   useEffect(() => {
     const loadLibrary = async () => {
       try {
         const storedTracks = await getAllTracks();
         if (storedTracks.length > 0) {
           setLibraryTracks(storedTracks);
+
+          // Check for last played track
+          const lastPlayedId = localStorage.getItem('lastPlayedTrackId');
+          if (lastPlayedId) {
+            const track = storedTracks.find(t => t.id === Number(lastPlayedId));
+            if (track) {
+              // Initial load without autoplay
+              handleSelectTrack(track, false);
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to load library:', err);
@@ -207,10 +219,15 @@ export default function App() {
     setQueue(newQueue);
   };
 
-  const handleSelectTrack = (file: File | any) => {
+  const handleSelectTrack = (file: File | any, shouldPlay: boolean = true) => {
     if (audioSource) URL.revokeObjectURL(audioSource);
     if (trackInfo.coverUrl && trackInfo.coverUrl.startsWith('blob:')) {
       URL.revokeObjectURL(trackInfo.coverUrl);
+    }
+
+    // Save playing track to local storage
+    if (file && file.id) {
+      localStorage.setItem('lastPlayedTrackId', file.id.toString());
     }
 
     const processFile = (fileToProcess: File, trackTitle: string, trackArtist: string) => {
@@ -312,8 +329,13 @@ export default function App() {
     setIsHiRes(highRes);
     setIs24Bit(highRes);
 
-    setActiveTab('player');
-    setIsPlaying(true);
+    // If it's the initial load, we don't switch to player or auto-play
+    if (shouldPlay) {
+      setActiveTab('player');
+      setIsPlaying(true);
+    } else {
+      setActiveTab('player'); // start on player, but don't play
+    }
   };
 
   const handleAddTracks = async (files: FileList | File[]) => {
@@ -356,19 +378,54 @@ export default function App() {
     }
   };
 
+  const handleTrackEnded = () => {
+    if (isRepeat) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => setIsPlaying(false));
+      }
+    } else {
+      handleNextTrack();
+    }
+  };
+
   const handleNextTrack = () => {
     const activeQueue = queue.length > 0 ? queue : libraryTracks;
-    if (activeQueue.length > 0 && currentQueueIndex < activeQueue.length - 1) {
-      const next = activeQueue[currentQueueIndex + 1];
-      handleSelectTrack(next);
+    if (activeQueue.length > 0) {
+      if (isShuffle) {
+        let nextIndex = Math.floor(Math.random() * activeQueue.length);
+        if (activeQueue.length > 1 && nextIndex === currentQueueIndex) {
+          nextIndex = (nextIndex + 1) % activeQueue.length;
+        }
+        handleSelectTrack(activeQueue[nextIndex]);
+      } else if (currentQueueIndex < activeQueue.length - 1) {
+        const next = activeQueue[currentQueueIndex + 1];
+        handleSelectTrack(next);
+      } else {
+        setIsPlaying(false);
+      }
+    } else {
+      setIsPlaying(false);
     }
   };
 
   const handlePreviousTrack = () => {
     const activeQueue = queue.length > 0 ? queue : libraryTracks;
-    if (activeQueue.length > 0 && currentQueueIndex > 0) {
-      const prev = activeQueue[currentQueueIndex - 1];
-      handleSelectTrack(prev);
+    if (activeQueue.length > 0) {
+      if (audioRef.current && audioRef.current.currentTime > 3) {
+        audioRef.current.currentTime = 0;
+      } else if (isShuffle) {
+        let prevIndex = Math.floor(Math.random() * activeQueue.length);
+        if (activeQueue.length > 1 && prevIndex === currentQueueIndex) {
+          prevIndex = (prevIndex + 1) % activeQueue.length;
+        }
+        handleSelectTrack(activeQueue[prevIndex]);
+      } else if (currentQueueIndex > 0) {
+        const prev = activeQueue[currentQueueIndex - 1];
+        handleSelectTrack(prev);
+      } else {
+        if (audioRef.current) audioRef.current.currentTime = 0;
+      }
     }
   };
 
@@ -382,7 +439,7 @@ export default function App() {
         ref={audioRef}
         src={audioSource || undefined}
         onTimeUpdate={() => {/* handled in Player via ref */ }}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={handleTrackEnded}
         style={{ display: 'none' }}
       />
 
@@ -497,6 +554,10 @@ export default function App() {
                   isHiRes={isHiRes}
                   is24Bit={is24Bit}
                   nextTrack={queue[currentQueueIndex + 1] || libraryTracks[0]}
+                  isShuffle={isShuffle}
+                  setIsShuffle={setIsShuffle}
+                  isRepeat={isRepeat}
+                  setIsRepeat={setIsRepeat}
                 />
               </motion.div>
             )}

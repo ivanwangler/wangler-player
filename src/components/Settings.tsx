@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Palette, Trash2, ShieldCheck, ChevronRight, Laptop } from 'lucide-react';
+import { Palette, Trash2, ShieldCheck, ChevronRight, Laptop, Folder } from 'lucide-react';
 import { clearAllTracks } from '../utils/db';
 
 interface SettingsProps {
@@ -17,6 +17,19 @@ const PRESET_COLORS = [
 ];
 
 export default function Settings({ accentColor, setAccentColor }: SettingsProps) {
+    const [storageInfo, setStorageInfo] = useState({ used: 0, total: 0 });
+
+    useEffect(() => {
+        if (navigator.storage && navigator.storage.estimate) {
+            navigator.storage.estimate().then(estimate => {
+                setStorageInfo({
+                    used: estimate.usage || 0,
+                    total: estimate.quota || 0
+                });
+            });
+        }
+    }, []);
+
     const handleClearLibrary = async () => {
         if (confirm('Tem certeza que deseja apagar toda a biblioteca permanentemente?')) {
             await clearAllTracks();
@@ -64,6 +77,29 @@ export default function Settings({ accentColor, setAccentColor }: SettingsProps)
                         <Laptop size={18} className="text-accent" />
                         <h3 className="text-[10px] uppercase tracking-[0.2em] font-display font-bold text-white/40">Gerenciamento de Dados</h3>
                     </div>
+
+                    {/* Storage Info */}
+                    <div className="glass-card rounded-[32px] p-5 border-white/5 flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                            <div className="p-2 rounded-xl bg-accent/10 text-accent">
+                                <Folder size={18} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-display font-bold uppercase tracking-wider">Device Storage</p>
+                                <p className="text-[9px] text-white/30 font-mono">
+                                    {(storageInfo.used / 1024 / 1024 / 1024).toFixed(1)} GB /
+                                    {(storageInfo.total / 1024 / 1024 / 1024).toFixed(1)} GB used
+                                </p>
+                            </div>
+                        </div>
+                        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-accent shadow-[0_0_10px_rgba(0,212,255,0.5)] transition-all duration-500"
+                                style={{ width: `${(storageInfo.total > 0 ? (storageInfo.used / storageInfo.total) * 100 : 0)}%` }}
+                            />
+                        </div>
+                    </div>
+
                     <div className="glass-card rounded-[32px] p-2 border-white/5 overflow-hidden">
                         <button
                             onClick={handleClearLibrary}

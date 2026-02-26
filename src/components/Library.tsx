@@ -1,6 +1,6 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload, Trash2, ListPlus, Disc3 } from 'lucide-react';
 
 interface Track {
   id: number;
@@ -40,19 +40,8 @@ export default function Library({
   const [activeTab, setActiveTab] = React.useState<TabType>('Biblioteca');
   const [selectedFolder, setSelectedFolder] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [storageInfo, setStorageInfo] = React.useState({ used: 0, total: 0 });
+  const [openMenuId, setOpenMenuId] = React.useState<number | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    if (navigator.storage && navigator.storage.estimate) {
-      navigator.storage.estimate().then(estimate => {
-        setStorageInfo({
-          used: estimate.usage || 0,
-          total: estimate.quota || 0
-        });
-      });
-    }
-  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -65,6 +54,12 @@ export default function Library({
       }
     }
   };
+
+  React.useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const folders = React.useMemo(() => {
     const map = new Map<string, Track[]>();
@@ -82,7 +77,7 @@ export default function Library({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05 }}
-      className={`group flex items-center p-3 rounded-3xl transition-all cursor-pointer border ${currentTrackId === track.id ? 'bg-accent/15 border-accent/30 shadow-lg' : 'hover:bg-white/5 border-transparent hover:border-white/5'}`}
+      className={`group relative flex items-center p-3 rounded-3xl transition-all cursor-pointer border ${currentTrackId === track.id ? 'bg-accent/15 border-accent/30 shadow-lg' : 'hover:bg-white/5 border-transparent hover:border-white/5'}`}
     >
       <div
         onClick={() => onSelectTrack(track)}
@@ -122,9 +117,65 @@ export default function Library({
         >
           <Trash2 size={16} />
         </button>
-        <button className="p-2 text-white/20 hover:text-white transition-colors">
-          <MoreVertical size={16} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === track.id ? null : track.id); }}
+            className={`p-2 transition-colors ${openMenuId === track.id ? 'text-accent bg-white/10 rounded-xl' : 'text-white/20 hover:text-white'}`}
+          >
+            <MoreVertical size={16} />
+          </button>
+
+          <AnimatePresence>
+            {openMenuId === track.id && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex flex-col py-1">
+                  <button
+                    onClick={() => { onPlayNext(track); setOpenMenuId(null); }}
+                    className="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors text-left"
+                  >
+                    <PlayCircle size={16} className="text-white/40" />
+                    <span>Reproduzir depois</span>
+                  </button>
+                  <button
+                    onClick={() => { onAddToQueue(track); setOpenMenuId(null); }}
+                    className="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors text-left"
+                  >
+                    <ListPlus size={16} className="text-white/40" />
+                    <span>Adicionar na fila</span>
+                  </button>
+                  {(track as any).folder && (
+                    <button
+                      onClick={() => {
+                        setActiveTab('Pastas');
+                        setSelectedFolder((track as any).folder);
+                        setOpenMenuId(null);
+                      }}
+                      className="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors text-left"
+                    >
+                      <Disc3 size={16} className="text-white/40" />
+                      <span>Acessar álbum</span>
+                    </button>
+                  )}
+                  <div className="h-px bg-white/10 mx-2 my-1" />
+                  <button
+                    onClick={() => { onRemoveTrack(track.id); setOpenMenuId(null); }}
+                    className="flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-sm text-red-400 hover:text-red-300 transition-colors text-left"
+                  >
+                    <Trash2 size={16} className="text-red-400/60" />
+                    <span>Excluir da biblioteca</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );
@@ -248,28 +299,6 @@ export default function Library({
             )}
           </>
         )}
-      </div>
-
-      {/* Storage Info */}
-      <div className="mt-6 p-5 rounded-3xl glass-card border-white/5 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-accent/10 text-accent">
-            <Folder size={18} />
-          </div>
-          <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-wider">Device Storage</p>
-            <p className="text-[9px] text-white/30 font-mono">
-              {(storageInfo.used / 1024 / 1024 / 1024).toFixed(1)} GB /
-              {(storageInfo.total / 1024 / 1024 / 1024).toFixed(1)} GB used
-            </p>
-          </div>
-        </div>
-        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-accent shadow-[0_0_10px_rgba(0,212,255,0.5)] transition-all duration-500"
-            style={{ width: `${(storageInfo.used / storageInfo.total) * 100 || 0}%` }}
-          />
-        </div>
       </div>
     </div>
   );

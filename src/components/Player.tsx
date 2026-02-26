@@ -18,6 +18,10 @@ interface PlayerProps {
   isHiRes?: boolean;
   is24Bit?: boolean;
   nextTrack?: { title: string; artist: string; coverUrl?: string };
+  isShuffle: boolean;
+  setIsShuffle: (v: boolean) => void;
+  isRepeat: boolean;
+  setIsRepeat: (v: boolean) => void;
 }
 
 interface LyricLine {
@@ -54,13 +58,15 @@ export default function Player({
   analyser,
   isHiRes = false,
   is24Bit = false,
-  nextTrack
+  nextTrack,
+  isShuffle,
+  setIsShuffle,
+  isRepeat,
+  setIsRepeat
 }: PlayerProps) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [showLyrics, setShowLyrics] = useState(false);
-  const [isShuffle, setIsShuffle] = useState(false);
-  const [isRepeat, setIsRepeat] = useState(false);
   const lyricsRef = useRef<HTMLDivElement>(null);
 
   const x = useMotionValue(0);
@@ -74,7 +80,7 @@ export default function Player({
 
     const onTimeUpdate = () => setCurrentTimeMs(audio.currentTime * 1000);
     const onLoadedMetadata = () => setDurationMs(audio.duration * 1000);
-    const onEnded = () => { setIsPlaying(false); setCurrentTimeMs(0); };
+    const onEnded = () => { setCurrentTimeMs(0); };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -85,7 +91,7 @@ export default function Player({
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [audioRef, setIsPlaying]);
+  }, [audioRef]);
 
   // Seek on progress bar click
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -205,7 +211,7 @@ export default function Player({
         </AnimatePresence>
 
         {/* Track Info */}
-        <div className="mt-4 text-center">
+        <div className="mt-2 text-center">
           <motion.h2
             key={trackInfo.title}
             initial={{ y: 10, opacity: 0 }}
@@ -227,7 +233,7 @@ export default function Player({
       </div>
 
       {/* Spectrum Analyzer */}
-      <div className="my-4">
+      <div className="my-1">
         <SpectrumAnalyzer isPlaying={isPlaying} accentColor={accentColor} analyser={analyser} />
       </div>
 
