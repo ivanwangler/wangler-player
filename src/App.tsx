@@ -161,6 +161,41 @@ export default function App() {
     if (outcome === 'accepted') setInstallPrompt(null);
   };
 
+  // ─── Android Back Button Interception ─────────────────────────────────────────
+  useEffect(() => {
+    // Push an initial state so the back button doesn't close the app by default
+    window.history.pushState({ noBackExitsApp: true }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      // Whenever the user presses "Back", they pop our dummy state.
+      // We immediately push it back again so the app stays open.
+      window.history.pushState({ noBackExitsApp: true }, '');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // ─── Media Session API (Background Audio on OS) ───────────────────────────
+  useEffect(() => {
+    if ('mediaSession' in navigator && audioSource) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: trackInfo.title,
+        artist: trackInfo.artist,
+        artwork: trackInfo.coverUrl ? [
+          { src: trackInfo.coverUrl, sizes: '512x512', type: 'image/jpeg' },
+          { src: trackInfo.coverUrl, sizes: '512x512', type: 'image/png' },
+          { src: trackInfo.coverUrl, sizes: '512x512', type: 'image/webp' }
+        ] : []
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('previoustrack', handlePreviousTrack);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNextTrack);
+    }
+  }, [trackInfo, audioSource]); // Hook relies on track info natively so OS notifications update
+
   // ─── Playback: react to audioSource change ────────────────────────────────
   useEffect(() => {
     if (!audioRef.current) return;
