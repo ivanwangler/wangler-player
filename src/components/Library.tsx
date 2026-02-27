@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload, Trash2, ListPlus, Disc3 } from 'lucide-react';
+import { Search, Folder, Music2, Heart, MoreVertical, PlayCircle, Upload, Trash2, ListPlus, Disc3, Pencil } from 'lucide-react';
 
 interface Track {
   id: number;
@@ -17,6 +17,7 @@ interface LibraryProps {
   onAddToQueue: (track: File | Track) => void;
   onAddTracks: (files: FileList | File[]) => void;
   onRemoveTrack: (id: number) => void;
+  onRenameTrack: (id: number, newName: string) => void;
   tracks: Track[];
   recentTracks: Track[];
   queue: Track[];
@@ -32,6 +33,7 @@ export default function Library({
   onAddToQueue,
   onAddTracks,
   onRemoveTrack,
+  onRenameTrack,
   tracks,
   recentTracks,
   queue,
@@ -41,6 +43,8 @@ export default function Library({
   const [selectedFolder, setSelectedFolder] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [openMenuId, setOpenMenuId] = React.useState<number | null>(null);
+  const [renameModalOpen, setRenameModalOpen] = React.useState<number | null>(null);
+  const [newTrackName, setNewTrackName] = React.useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,6 +168,17 @@ export default function Library({
                     </button>
                   )}
                   <div className="h-px bg-white/10 mx-2 my-1" />
+                  <button
+                    onClick={() => {
+                      setRenameModalOpen(track.id);
+                      setNewTrackName(track.title);
+                      setOpenMenuId(null);
+                    }}
+                    className="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors text-left"
+                  >
+                    <Pencil size={16} className="text-white/40" />
+                    <span>Renomear música</span>
+                  </button>
                   <button
                     onClick={() => { onRemoveTrack(track.id); setOpenMenuId(null); }}
                     className="flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-sm text-red-400 hover:text-red-300 transition-colors text-left"
@@ -300,6 +315,67 @@ export default function Library({
           </>
         )}
       </div>
+
+      {/* Rename Modal */}
+      <AnimatePresence>
+        {renameModalOpen !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setRenameModalOpen(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-3xl p-6 shadow-2xl relative"
+            >
+              <h3 className="text-lg font-display font-bold text-white mb-4 flex items-center">
+                <Pencil size={20} className="mr-2 text-accent" />
+                Renomear Música
+              </h3>
+              <input
+                type="text"
+                autoFocus
+                value={newTrackName}
+                onChange={(e) => setNewTrackName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newTrackName.trim() !== '') {
+                    onRenameTrack(renameModalOpen, newTrackName.trim());
+                    setRenameModalOpen(null);
+                  } else if (e.key === 'Escape') {
+                    setRenameModalOpen(null);
+                  }
+                }}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:border-accent/50 transition-colors mb-6"
+                placeholder="Novo nome da música..."
+              />
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setRenameModalOpen(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (newTrackName.trim() !== '') {
+                      onRenameTrack(renameModalOpen, newTrackName.trim());
+                      setRenameModalOpen(null);
+                    }
+                  }}
+                  className="px-5 py-2 rounded-xl text-sm font-bold text-black bg-accent hover:bg-accent/90 transition-colors shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+                >
+                  Salvar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

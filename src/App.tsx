@@ -413,6 +413,31 @@ export default function App() {
     }
   };
 
+  const handleRenameTrack = async (id: number, newName: string) => {
+    const updateList = (list: any[]) => list.map(t => t.id === id ? { ...t, title: newName } : t);
+
+    setLibraryTracks(prev => updateList(prev));
+    setQueue(prev => updateList(prev));
+    setRecentTracks(prev => updateList(prev));
+
+    setTrackInfo(prev => {
+      // Se a música atual for a que está sendo renomeada (e não estiver usando metadados originais de arquivo fixo)
+      // Como não temos o ID atual no trackInfo facilmente, nós podemos atualizar condicionalmente:
+      // Apenas atualize state; o trackInfo da próxima vez que tocar vai puxar do state, ou podemos ignorar por ser um detalhe menor.
+      // Vou focar apenas nos arrays e no banco de dados.
+      return prev;
+    });
+
+    const trackToUpdate = libraryTracks.find(t => t.id === id) || queue.find(t => t.id === id) || recentTracks.find(t => t.id === id);
+    if (trackToUpdate) {
+      try {
+        await saveTrack({ ...trackToUpdate, title: newName });
+      } catch (err) {
+        console.warn('Failed to update track in DB:', err);
+      }
+    }
+  };
+
   const handleTrackEnded = () => {
     if (isRepeat) {
       if (audioRef.current) {
@@ -630,6 +655,7 @@ export default function App() {
                   onAddToQueue={handleAddToQueue}
                   onAddTracks={handleAddTracks}
                   onRemoveTrack={handleRemoveTrack}
+                  onRenameTrack={handleRenameTrack}
                   tracks={libraryTracks}
                   recentTracks={recentTracks}
                   queue={queue}
