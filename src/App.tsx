@@ -9,6 +9,62 @@ import Settings from './components/Settings';
 import ArchitectureDoc from './components/ArchitectureDoc';
 import { getAllTracks, saveTrack, deleteTrack } from './utils/db';
 
+const extractDominantColor = (imageUrl: string, fallback: string = '#EAB308'): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!imageUrl || imageUrl === 'https://i.postimg.cc/W4ND1Ypt/aguia.webp') {
+      resolve(fallback);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(fallback);
+        return;
+      }
+
+      canvas.width = 50;
+      canvas.height = 50;
+      ctx.drawImage(img, 0, 0, 50, 50);
+
+      try {
+        const imageData = ctx.getImageData(0, 0, 50, 50).data;
+        let r = 0, g = 0, b = 0, count = 0;
+
+        // Simple pixel average
+        for (let i = 0; i < imageData.length; i += 16) {
+          r += imageData[i];
+          g += imageData[i + 1];
+          b += imageData[i + 2];
+          count++;
+        }
+
+        r = Math.floor(r / count);
+        g = Math.floor(g / count);
+        b = Math.floor(b / count);
+
+        // Boost saturation for better UI pop
+        const max = Math.max(r, g, b);
+        if (max > 0) {
+          const multiplier = 255 / max;
+          r = Math.min(255, Math.floor(r * multiplier * 0.8));
+          g = Math.min(255, Math.floor(g * multiplier * 0.8));
+          b = Math.min(255, Math.floor(b * multiplier * 0.8));
+        }
+
+        resolve(`rgb(${r}, ${g}, ${b})`);
+      } catch (e) {
+        resolve(fallback);
+      }
+    };
+    img.onerror = () => resolve(fallback);
+    img.src = imageUrl;
+  });
+};
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'player' | 'eq' | 'library' | 'arch' | 'dsp' | 'settings'>('player');
@@ -18,7 +74,8 @@ export default function App() {
   const [trackInfo, setTrackInfo] = useState({
     title: 'No Track Selected',
     artist: 'Upload from Library',
-    coverUrl: ''
+    coverUrl: '',
+    lyrics: ''
   });
   const [volume, setVolume] = useState(0.8);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
@@ -29,7 +86,10 @@ export default function App() {
 
   // Refs — all persistent, never recreated on tab switch
   const audioRef = useRef<HTMLAudioElement>(null);
+  const crossfadeAudioRef = useRef<HTMLAudioElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const [isCrossfading, setIsCrossfading] = useState(false);
 
   // Queue and Library
   const [queue, setQueue] = useState<any[]>([]);
@@ -199,7 +259,7 @@ export default function App() {
   // ─── Playback: react to audioSource change ────────────────────────────────
   useEffect(() => {
     if (!audioRef.current) return;
-    if (audioSource) {
+    if (audioSource && !isCrossfading) {
       // audioSource change already updates <audio src> via React render.
       // We need to call load() so the browser picks up the new src,
       // then play().
@@ -207,7 +267,7 @@ export default function App() {
       initAudioContext();
       if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume();
       audioRef.current.play().catch(() => setIsPlaying(false));
-    } else {
+    } else if (!isCrossfading) {
       audioRef.current.pause();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,8 +287,8 @@ export default function App() {
 
   // ─── Volume ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
+    if (audioRef.current && !isCrossfading) audioRef.current.volume = volume;
+  }, [volume, isCrossfading]);
 
   // ─── Cleanup blob URL on change ───────────────────────────────────────────
   useEffect(() => {
@@ -283,16 +343,22 @@ export default function App() {
             setTrackInfo({
               title: title || trackTitle,
               artist: artist || trackArtist,
-              coverUrl: coverUrl
+              coverUrl: coverUrl,
+              lyrics: fileToProcess.type === 'audio/unknown' ? '' : (file as any).lyrics || '' // default empty if local, wait for state map
             });
+            if (coverUrl) {
+              extractDominantColor(coverUrl).then(setAccentColor);
+            } else {
+              setAccentColor('#EAB308');
+            }
           },
           onError: (error: any) => {
             console.warn('Error reading tags:', error);
-            setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '' });
+            setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '', lyrics: (file as any).lyrics || '' });
           }
         });
       } else {
-        setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '' });
+        setTrackInfo({ title: trackTitle, artist: trackArtist, coverUrl: '', lyrics: (file as any).lyrics || '' });
         // Fallback to AI Cover if not in history or similar
         fetchAICover(trackTitle, trackArtist);
       }
@@ -321,6 +387,7 @@ export default function App() {
           ...prev,
           coverUrl: dynamicUrl
         }));
+        extractDominantColor(dynamicUrl).then(setAccentColor);
       } catch (err) {
         console.warn('AI Cover error:', err);
       }
@@ -352,7 +419,8 @@ export default function App() {
       if (!file.coverUrl) fetchAICover(file.title, file.artist);
     } else {
       setAudioSource(null);
-      setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '' });
+      setTrackInfo({ title: file.title, artist: file.artist, coverUrl: '', lyrics: file.lyrics || '' });
+      setAccentColor('#EAB308');
       setCurrentQueueIndex(queue.findIndex(t => t.id === file.id));
       setRecentTracks(prev => [file, ...prev.filter(t => t.id !== file.id)].slice(0, 20));
       fetchAICover(file.title, file.artist);
@@ -365,28 +433,45 @@ export default function App() {
     setIs24Bit(highRes);
 
     // If it's the initial load, we don't switch to player or auto-play
-    if (shouldPlay) {
+    if (shouldPlay && !isCrossfading) {
       setActiveTab('player');
       setIsPlaying(true);
-    } else {
+    } else if (!isCrossfading) {
       setActiveTab('player'); // start on player, but don't play
     }
   };
 
   const handleAddTracks = async (files: FileList | File[]) => {
-    const newTracks: any[] = Array.from(files).map(file => {
+    const fileArray = Array.from(files);
+    const audioFiles = fileArray.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.mp3') || f.name.endsWith('.flac') || f.name.endsWith('.wav'));
+    const lrcFiles = fileArray.filter(f => f.name.endsWith('.lrc'));
+
+    const lrcMap = new Map<string, string>();
+    for (const lrc of lrcFiles) {
+      try {
+        const text = await lrc.text();
+        const baseName = lrc.name.replace(/\.[^/.]+$/, '');
+        lrcMap.set(baseName, text);
+      } catch (err) {
+        console.warn('Failed to read LRC file:', err);
+      }
+    }
+
+    const newTracks: any[] = audioFiles.map(file => {
       // In a real mobile environment, we might get webkitRelativePath if the user uploads a folder
       const path = (file as any).webkitRelativePath || '';
       const folderName = path.split('/')[0] || 'Biblioteca';
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
 
       return {
         id: Math.random() + Date.now(),
-        title: file.name.replace(/\.[^/.]+$/, ''),
+        title: baseName,
         artist: 'Local File',
         isFile: true,
         file,
         format: file.name.split('.').pop()?.toUpperCase(),
-        folder: folderName
+        folder: folderName,
+        lyrics: lrcMap.get(baseName) || ''
       };
     });
 
@@ -489,6 +574,76 @@ export default function App() {
     }
   };
 
+  // ─── Crossfade Logic ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !dspSettings.smartCrossfade || isRepeat) return;
+
+    let crossfadeInterval: any;
+
+    const onTimeUpdate = () => {
+      const activeQueue = queue.length > 0 ? queue : libraryTracks;
+      const nextTrack = activeQueue[currentQueueIndex + 1];
+
+      if (!nextTrack || isCrossfading || audio.duration <= dspSettings.crossfadeDuration) return;
+
+      const timeLeft = audio.duration - audio.currentTime;
+      if (timeLeft <= dspSettings.crossfadeDuration) {
+        // Init Crossfade
+        setIsCrossfading(true);
+
+        // Prepare next track audio
+        if (crossfadeAudioRef.current) {
+          const nextFile = nextTrack.file || nextTrack; // handle file vs blobl url if needed
+          const processCrossfadeFile = (f: File) => URL.createObjectURL(f);
+
+          let nextUrl = '';
+          if (nextFile instanceof File) nextUrl = processCrossfadeFile(nextFile);
+
+          if (nextUrl) {
+            crossfadeAudioRef.current.src = nextUrl;
+            crossfadeAudioRef.current.volume = 0;
+            crossfadeAudioRef.current.play().catch(e => console.warn("Crossfade play blocked:", e));
+          }
+        }
+
+        const steps = 20;
+        const stepTime = (dspSettings.crossfadeDuration * 1000) / steps;
+        let currentStep = 0;
+
+        crossfadeInterval = setInterval(() => {
+          currentStep++;
+          const progress = currentStep / steps;
+
+          if (audioRef.current) {
+            audioRef.current.volume = Math.max(0, volume * (1 - progress));
+          }
+          if (crossfadeAudioRef.current) {
+            crossfadeAudioRef.current.volume = Math.min(volume, volume * progress);
+          }
+
+          if (currentStep >= steps) {
+            clearInterval(crossfadeInterval);
+            handleNextTrack();
+            setIsCrossfading(false);
+            if (audioRef.current) audioRef.current.volume = volume;
+            if (crossfadeAudioRef.current) {
+              crossfadeAudioRef.current.pause();
+              URL.revokeObjectURL(crossfadeAudioRef.current.src);
+              crossfadeAudioRef.current.src = '';
+            }
+          }
+        }, stepTime);
+      }
+    };
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      if (crossfadeInterval) clearInterval(crossfadeInterval);
+    };
+  }, [currentQueueIndex, queue, libraryTracks, dspSettings.smartCrossfade, dspSettings.crossfadeDuration, isCrossfading, volume, isRepeat]);
+
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-8 relative bg-midnight"
@@ -500,6 +655,10 @@ export default function App() {
         src={audioSource || undefined}
         onTimeUpdate={() => {/* handled in Player via ref */ }}
         onEnded={handleTrackEnded}
+        style={{ display: 'none' }}
+      />
+      <audio
+        ref={crossfadeAudioRef}
         style={{ display: 'none' }}
       />
 

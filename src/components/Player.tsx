@@ -9,7 +9,7 @@ interface PlayerProps {
   accentColor: string;
   audioSource: string | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
-  trackInfo: { title: string; artist: string; coverUrl?: string };
+  trackInfo: { title: string; artist: string; coverUrl?: string; lyrics?: string };
   onNext: () => void;
   onPrevious: () => void;
   volume: number;
@@ -17,7 +17,7 @@ interface PlayerProps {
   analyser: AnalyserNode | null;
   isHiRes?: boolean;
   is24Bit?: boolean;
-  nextTrack?: { title: string; artist: string; coverUrl?: string };
+  nextTrack?: { title: string; artist: string; coverUrl?: string; lyrics?: string };
   isShuffle: boolean;
   setIsShuffle: (v: boolean) => void;
   isRepeat: boolean;
@@ -28,21 +28,6 @@ interface LyricLine {
   time: number; // ms
   text: string;
 }
-
-const mockLyrics: LyricLine[] = [
-  { time: 0, text: "You own the city" },
-  { time: 3000, text: "The city owns you" },
-  { time: 6000, text: "Midnight city" },
-  { time: 9000, text: "Waiting for the sun" },
-  { time: 12000, text: "To come and take us home" },
-  { time: 15000, text: "Looking at the stars" },
-  { time: 18000, text: "Waiting for a sign" },
-  { time: 21000, text: "Midnight city" },
-  { time: 24000, text: "The neon lights are calling" },
-  { time: 27000, text: "In the rhythm of the night" },
-  { time: 30000, text: "We are the dreamers" },
-  { time: 33000, text: "Hurry up, we're dreaming" },
-];
 
 export default function Player({
   isPlaying,
@@ -67,11 +52,37 @@ export default function Player({
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [isVinylMode, setIsVinylMode] = useState(false);
+  const [parsedLyrics, setParsedLyrics] = useState<LyricLine[]>([]);
   const lyricsRef = useRef<HTMLDivElement>(null);
 
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-100, 100], [-10, 10]);
   const opacity = useTransform(x, [-150, -100, 0, 100, 150], [0, 0.5, 1, 0.5, 0]);
+
+  // Parse Lyrics
+  useEffect(() => {
+    if (trackInfo.lyrics) {
+      const lines = trackInfo.lyrics.split('\n');
+      const regex = /\[(\d{2}):(\d{2}(?:\.\d{2,3})?)\](.*)/;
+      const parsed: LyricLine[] = [];
+
+      lines.forEach(line => {
+        const match = regex.exec(line);
+        if (match) {
+          const minutes = parseInt(match[1]);
+          const seconds = parseFloat(match[2]);
+          const text = match[3].trim();
+          if (text) {
+            parsed.push({ time: (minutes * 60 + seconds) * 1000, text });
+          }
+        }
+      });
+      setParsedLyrics(parsed.sort((a, b) => a.time - b.time));
+    } else {
+      setParsedLyrics([]);
+    }
+  }, [trackInfo.lyrics]);
 
   // Subscribe to the persistent audio element's time/duration events
   useEffect(() => {
@@ -109,9 +120,9 @@ export default function Player({
 
   // Lyrics scroll sync
   useEffect(() => {
-    if (showLyrics && lyricsRef.current) {
-      const idx = mockLyrics.findIndex((l, i) =>
-        currentTimeMs >= l.time && (i === mockLyrics.length - 1 || currentTimeMs < mockLyrics[i + 1].time)
+    if (showLyrics && lyricsRef.current && parsedLyrics.length > 0) {
+      const idx = parsedLyrics.findIndex((l, i) =>
+        currentTimeMs >= l.time && (i === parsedLyrics.length - 1 || currentTimeMs < parsedLyrics[i + 1].time)
       );
       if (idx !== -1) {
         const el = lyricsRef.current.children[idx] as HTMLElement;
@@ -123,7 +134,7 @@ export default function Player({
         }
       }
     }
-  }, [currentTimeMs, showLyrics]);
+  }, [currentTimeMs, showLyrics, parsedLyrics]);
 
   const handleDragEnd = (_: any, info: any) => {
     if (info.offset.x > 100) onPrevious();
@@ -141,26 +152,33 @@ export default function Player({
       {/* Album Art + Lyrics */}
       <div className="flex-1 flex flex-col items-center justify-start pt-4 relative">
         <motion.div
-          style={{ x, rotate, opacity }}
-          drag="x"
+          style={{ x, rotate: isVinylMode && isPlaying ? undefined : rotate, opacity }}
+          animate={isVinylMode ? { rotate: isPlaying ? 360 : 0 } : undefined}
+          transition={isVinylMode ? { repeat: Infinity, ease: 'linear', duration: 4 } : undefined}
+          drag={!isVinylMode ? "x" : false}
           dragConstraints={{ left: 0, right: 0 }}
           onDragEnd={handleDragEnd}
-          className="relative w-full aspect-square max-w-[220px] group cursor-grab active:cursor-grabbing"
+          onClick={() => setIsVinylMode(!isVinylMode)}
+          className={`relative w-full aspect-square max-w-[220px] group cursor-pointer ${isVinylMode ? 'rounded-full' : 'rounded-[28px]'}`}
         >
           <div
-            className="absolute inset-0 rounded-[28px] blur-[30px] opacity-30 transition-colors duration-1000"
+            className={`absolute inset-0 blur-[30px] opacity-30 transition-all duration-1000 ${isVinylMode ? 'rounded-full' : 'rounded-[28px]'}`}
             style={{ backgroundColor: accentColor }}
           />
           <img
             src={trackInfo.coverUrl || (trackInfo.title === 'No Track Selected' ? 'https://i.postimg.cc/W4ND1Ypt/aguia.webp' : 'https://picsum.photos/seed/music/600/600')}
             alt="Album Art"
-            className="w-full h-full object-cover rounded-[28px] shadow-[0_15px_40px_rgba(0,0,0,0.5)] relative z-10 border border-white/10"
+            className={`w-full h-full object-cover shadow-[0_15px_40px_rgba(0,0,0,0.5)] relative z-10 border transition-all duration-300 ${isVinylMode ? 'rounded-full border-black/80 ring-[8px] ring-black border-[12px] animate-spin-slow' : 'rounded-[28px] border-white/10'}`}
             referrerPolicy="no-referrer"
           />
+          {/* Vinyl inner groove decoration */}
+          {isVinylMode && (
+            <div className="absolute inset-0 z-15 rounded-full border-[10px] border-white/5 opacity-50 m-8 pointer-events-none shadow-inner" />
+          )}
           {/* Lyrics toggle - nested to avoid overlap */}
           <button
             onClick={(e) => { e.stopPropagation(); setShowLyrics(!showLyrics); }}
-            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all z-30 shadow-lg ${showLyrics ? 'bg-white text-black' : 'bg-black/40 text-white/70 hover:text-white backdrop-blur-md border border-white/10'}`}
+            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all z-30 shadow-lg ${showLyrics ? 'bg-white text-black' : 'bg-black/40 text-white/70 hover:text-white backdrop-blur-md border border-white/10'} ${parsedLyrics.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           >
             <Languages size={18} />
           </button>
@@ -190,20 +208,22 @@ export default function Player({
                 }}
               >
                 <div className="py-[50%] space-y-8">
-                  {mockLyrics.map((line, i) => {
+                  {parsedLyrics.length > 0 ? parsedLyrics.map((line, i) => {
                     const isActive = currentTimeMs >= line.time &&
-                      (i === mockLyrics.length - 1 || currentTimeMs < mockLyrics[i + 1].time);
+                      (i === parsedLyrics.length - 1 || currentTimeMs < parsedLyrics[i + 1].time);
                     return (
                       <motion.p
                         key={i}
                         animate={{ opacity: isActive ? 1 : 0.2, scale: isActive ? 1.05 : 1 }}
-                        className="text-xl font-medium leading-relaxed"
+                        className="text-xl font-medium leading-relaxed text-center"
                         style={{ textShadow: isActive ? `0 0 20px ${accentColor}40` : 'none' }}
                       >
                         {line.text}
                       </motion.p>
                     );
-                  })}
+                  }) : (
+                    <p className="text-white/40 text-center font-medium">Nenhuma letra encontrada.</p>
+                  )}
                 </div>
               </div>
             </motion.div>

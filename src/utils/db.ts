@@ -15,6 +15,7 @@ export interface PersistedTrack {
     folder?: string;
     file: File | Blob;
     coverUrl?: string;
+    lyrics?: string;
 }
 
 const openDB = (): Promise<IDBDatabase> => {
